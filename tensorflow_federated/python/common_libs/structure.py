@@ -193,6 +193,19 @@ class Struct(object):
     """
     return to_odict(self, recursive=recursive)
 
+  def coerce_to_ordered_dict_or_tuple(self, recursive=False):
+    """Converts the Struct to an OrderedDict or tuple.
+
+    Args:
+      recursive: Whether to convert nested `Struct`s recursively.
+
+    Returns:
+      An `collections.OrderedDict` if all the Struct elements have names, or
+      a tuple if no element has name.
+    """
+
+    return to_odict_or_tuple(self, recursive=recursive)
+
 
 def name_list(struct: Struct) -> List[str]:
   """Returns a `list` of the names of the named fields in `struct`.
@@ -283,6 +296,40 @@ def to_odict(struct: Struct, recursive=False):
     return to_container_recursive(struct, _to_odict)
   else:
     return _to_odict(to_elements(struct))
+
+
+def to_odict_or_tuple(struct: Struct, recursive=False):
+  """Returns `struct` as an `OrderedDict` or tuple, if possible.
+
+  If all Struct elements have names, convert it to an OrderedDict. If no Struct
+  element has name, convert it to a tuple. If both named and unnamed elements
+  exist, raise an error.
+
+  Args:
+    struct: A `Struct`.
+    recursive: Whether to convert nested `Struct`s recursively.
+
+  Raises:
+    ValueError: If the `Struct` contains both named and unnamed elements.
+  """
+  py_typecheck.check_type(struct, Struct)
+
+  def _to_odict_or_tuple(elements):
+    field_is_named = tuple(name is not None for name, _ in elements)
+    has_names = any(field_is_named)
+    is_all_named = all(field_is_named)
+    if is_all_named:
+      return collections.OrderedDict(elements)
+    elif not has_names:
+      return tuple(value for name, value in elements)
+    else:
+      raise ValueError('Cannot convert an `Struct` with both named and unnamed '
+                       'entries to an OrderedDict or tuple: {}'.format(struct))
+
+  if recursive:
+    return to_container_recursive(struct, _to_odict_or_tuple)
+  else:
+    return _to_odict_or_tuple(to_elements(struct))
 
 
 def flatten(struct):

@@ -69,6 +69,7 @@ class StructTest(absltest.TestCase):
     self.assertNotEqual(x, structure.Struct([('foo', 10)]))
     self.assertEqual(structure.to_elements(x), v)
     self.assertEqual(structure.to_odict(x), collections.OrderedDict())
+    self.assertEqual(structure.to_odict_or_tuple(x), collections.OrderedDict())
     self.assertEqual(repr(x), 'Struct([])')
     self.assertEqual(str(x), '<>')
 
@@ -88,6 +89,7 @@ class StructTest(absltest.TestCase):
     self.assertEqual(structure.to_elements(x), v)
     self.assertEqual(repr(x), 'Struct([(None, 10)])')
     self.assertEqual(str(x), '<10>')
+    self.assertEqual(structure.to_odict_or_tuple(x), tuple([10]))
     with self.assertRaisesRegex(ValueError, 'unnamed'):
       structure.to_odict(x)
 
@@ -110,6 +112,7 @@ class StructTest(absltest.TestCase):
     self.assertEqual(repr(x), 'Struct([(\'foo\', 20)])')
     self.assertEqual(str(x), '<foo=20>')
     self.assertEqual(structure.to_odict(x), collections.OrderedDict(v))
+    self.assertEqual(structure.to_odict_or_tuple(x), collections.OrderedDict(v))
 
   def test_multiple_named_and_unnamed(self):
     v = [(None, 10), ('foo', 20), ('bar', 30)]
@@ -135,6 +138,8 @@ class StructTest(absltest.TestCase):
     self.assertEqual(str(x), '<10,foo=20,bar=30>')
     with self.assertRaisesRegex(ValueError, 'unnamed'):
       structure.to_odict(x)
+    with self.assertRaisesRegex(ValueError, 'named and unnamed'):
+      structure.to_odict_or_tuple(x)
 
   def test_bad_names(self):
     with self.assertRaisesRegex(ValueError, 'duplicated.*foo'):
@@ -445,16 +450,36 @@ class StructTest(absltest.TestCase):
     x = structure.from_container(s, recursive=True)
     s2 = x._asdict(recursive=True)
     self.assertEqual(s, s2)
+    self.assertEqual(s, x.coerce_to_ordered_dict_or_tuple(recursive=True))
 
     # Single OrderedDict.
     s = odict(a=1, b=2)
     x = structure.from_container(s)
     self.assertEqual(x._asdict(recursive=True), s)
+    self.assertEqual(x.coerce_to_ordered_dict_or_tuple(recursive=True), s)
 
     # Single empty OrderedDict.
     s = odict()
     x = structure.from_container(s)
     self.assertEqual(x._asdict(recursive=True), s)
+    self.assertEqual(x.coerce_to_ordered_dict_or_tuple(recursive=True), s)
+
+    # Nested tuples.
+    s = tuple([1, 2, tuple([3, tuple([4, 5])])])
+    x = structure.from_container(s, recursive=True)
+    self.assertEqual(s, x.coerce_to_ordered_dict_or_tuple(recursive=True))
+
+    # Single tuple.
+    s = tuple([1, 2])
+    x = structure.from_container(s)
+    self.assertEqual(x.coerce_to_ordered_dict_or_tuple(recursive=True), s)
+
+    # Struct from an empty tuple should be converted to an empty OrderedDict.
+    s = tuple()
+    x = structure.from_container(s)
+    self.assertEqual(
+        x.coerce_to_ordered_dict_or_tuple(recursive=True),
+        collections.OrderedDict())
 
     # Invalid argument.
     with self.assertRaises(TypeError):
